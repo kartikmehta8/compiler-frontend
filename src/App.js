@@ -1,15 +1,18 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import axios from "axios";
 import AceEditor from "react-ace";
 import { jsPDF } from "jspdf";
 import copy from "./copy.png";
 import pdf from "./pdf.png";
+import stubs from "./defaultStubs";
 
 function App() {
     const [code, setCode] = useState("");
     const [output, setOutput] = useState("");
     const [language, setLanguage] = useState("cpp");
     const [name, setName] = useState("default-code");
+    const [status, setStatus] = useState("");
+    const [jobId, setJobId] = useState("");
 
     // const myStyle = {
     //     color: "white",
@@ -58,7 +61,35 @@ function App() {
                 "http://localhost:5000/run",
                 payload
             );
-            setOutput(data.output);
+            console.log(data);
+            setJobId(data.jobId);
+
+            let intervalId;
+
+            intervalId = setInterval(async () => {
+                const { data: dataResult } = await axios.get(
+                    "http://localhost:5000/status",
+                    { params: { id: data.jobId } }
+                );
+
+                const { success, job, error } = dataResult;
+                console.log(dataResult);
+
+                if (success) {
+                    const { status: jobStatus, output: jobOutput } = job;
+                    setStatus(jobStatus);
+                    if (jobStatus === "pending") return;
+                    setOutput(jobOutput);
+                    clearInterval(intervalId);
+                } else {
+                    setStatus("ERROR");
+                    console.log(error);
+                    clearInterval(intervalId);
+                    setOutput(error);
+                }
+
+                console.log(dataResult);
+            }, 1000);
         } catch ({ response }) {
             if (response) {
                 const errMsg = response.data.err.stderr;
@@ -68,6 +99,11 @@ function App() {
             }
         }
     };
+
+    // useEffect(() => {
+    //     setCode(stubs[language]);
+    //     console.log(stubs[language]);
+    // }, [language]);
 
     return (
         <div className="mx-8">
@@ -82,7 +118,12 @@ function App() {
                             className="ubuntu"
                             value={language}
                             onChange={(e) => {
-                                setLanguage(e.target.value);
+                                let response = window.confirm(
+                                    "Are you sure you want to switch the tab?"
+                                );
+                                if (response) {
+                                    setLanguage(e.target.value);
+                                }
                             }}
                         >
                             <option value="c">C</option>
@@ -204,9 +245,12 @@ function App() {
                                 </div>
                                 <div
                                     className="h-full w-full bg-black text-white p-4"
-                                    style={{ height: "250px", width: "500px" }}
+                                    style={{ height: "230px", width: "500px" }}
                                 >
                                     {output}
+                                </div>
+                                <div className="flex justify-center bg-gray-200 pr-2">
+                                    {status}
                                 </div>
                             </div>
                         </div>
@@ -214,6 +258,7 @@ function App() {
                     <br />
                 </div>
             </div>
+            {/* <p>{jobId && `JobID : ${jobId}`}</p> */}
         </div>
     );
 }
